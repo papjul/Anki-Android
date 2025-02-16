@@ -81,6 +81,7 @@ import com.drakeet.drawer.FullDraggableContainer
 import com.google.android.material.snackbar.Snackbar
 import com.ichi2.anim.ActivityTransitionAnimation
 import com.ichi2.anki.AbstractFlashcardViewer.Signal.Companion.toSignal
+import com.ichi2.anki.CollectionHelper.getMediaDirectory
 import com.ichi2.anki.CollectionManager.TR
 import com.ichi2.anki.CollectionManager.withCol
 import com.ichi2.anki.android.back.exitViaDoubleTapBackCallback
@@ -274,7 +275,14 @@ abstract class AbstractFlashcardViewer :
     /** Handle joysticks/pedals */
     protected lateinit var motionEventHandler: MotionEventHandler
 
-    val server = AnkiServer(this).also { it.start() }
+    val server =
+        AnkiServer(this).also {
+            try {
+                it.start()
+            } catch (e: Exception) {
+                // Show a toast later, when view is initialized
+            }
+        }
 
     @get:VisibleForTesting
     var cardContent: String? = null
@@ -559,6 +567,9 @@ abstract class AbstractFlashcardViewer :
         this.setTheme(R.style.ThemeOverlay_DisableKeyboardHighlight)
 
         setContentView(getContentViewAttr(fullscreenMode))
+        if (!server.isAlive) {
+            showSnackbar(getString(R.string.toast_failed_to_start_server))
+        }
 
         // Make ACTION_PROCESS_TEXT for in-app searching possible on > Android 4.0
         delegate.isHandleNativeActionModesEnabled = true
@@ -1549,7 +1560,11 @@ abstract class AbstractFlashcardViewer :
         if (card != null) {
             card.settings.mediaPlaybackRequiresUserGesture = !cardMediaPlayer.config.autoplay
             card.loadDataWithBaseURL(
-                server.baseUrl(),
+                if (server.isAlive) {
+                    server.baseUrl()
+                } else {
+                    getMediaBaseUrl(getMediaDirectory(AnkiDroidApp.instance).path)
+                },
                 content,
                 "text/html",
                 null,
